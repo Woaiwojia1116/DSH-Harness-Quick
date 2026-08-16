@@ -1,0 +1,26 @@
+{
+  "name": "deepseek-harness-launcher",
+  "version": "1.0.0",
+  "description": "DeepSeek Harness desktop launcher - double-click to start dsh web with a whale icon, no console window",
+  "main": "src/index.js",
+  "bin": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "build": "node scripts/make-icon.js && node scripts/compile-cs.js",
+    "build:icon": "node scripts/make-icon.js",
+    "build:exe": "node scripts/compile-cs.js",
+    "stop": "node src/stop.js"
+  },
+  "keywords": [
+    "deepseek",
+    "harness",
+    "dsh",
+    "launcher"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "png-to-ico": "^3.0.0",
+    "sharp": "^0.33.0"
+  }
+}

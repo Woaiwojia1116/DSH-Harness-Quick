@@ -1,6 +1,6 @@
 # DeepSeek Harness 桌面启动器
 
-将 `npx @deepseek-ai/dsh web` 封装成一个双击即用的 Windows `.exe`，带鲸鱼图标，**无任何终端窗口**。
+将 `npx @deepseek-ai/dsh web` 封装成一个双击即用的 Windows `.exe`，带大肥鱼图标，**无任何终端窗口**。
 
 ## 效果
 
@@ -20,7 +20,7 @@ dsh-destop/
 │   ├── compile-cs.js         # C# 编译编排（生成最终 exe）
 │   └── make-icon.js          # PNG → ICO 转换
 ├── assets/
-│   └── whale.png             # 鲸鱼图标源图（透明 PNG）
+│   └── whale.png             # 大肥鱼图标源图（透明 PNG）
 ├── build/                    # 构建中间产物（icon.ico）
 ├── dist/                     # 最终产物 DeepSeek-Harness.exe
 ├── package.json
@@ -36,7 +36,7 @@ dsh-destop/
 
 - [.NET Framework 4.x](https://dotnet.microsoft.com)（Windows 自带）
 - [Node.js](https://nodejs.org) LTS（≥18，仅在需要重新生成图标时用到）
-- 鲸鱼 PNG 放在 `assets/whale.png`
+- 大肥鱼 PNG 放在 `assets/whale.png`
 
 ### 一键构建
 
@@ -55,7 +55,7 @@ dsh-destop/
 ### 手动步骤
 
 ```bash
-# 1. 准备图标（把鲸鱼 PNG 放到 assets/whale.png 后执行一次）
+# 1. 准备图标（把大肥鱼 PNG 放到 assets/whale.png 后执行一次）
 npm install
 npm run build:icon
 
@@ -65,7 +65,7 @@ npm run build:exe
 
 ## 系统托盘
 
-启动完成后程序常驻系统托盘（鲸鱼图标），右键图标弹出菜单：
+启动完成后程序常驻系统托盘（大肥鱼图标），右键图标弹出菜单：
 
 | 菜单项 | 作用 |
 | --- | --- |

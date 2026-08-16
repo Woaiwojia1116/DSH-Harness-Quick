@@ -15,6 +15,7 @@ using System;
 using System.Diagnostics;
 using System.Drawing;
 using System.IO;
+using System.Management;
 using System.Net.Sockets;
 using System.Text.RegularExpressions;
 using System.Threading;
@@ -30,6 +31,7 @@ namespace DeepSeekHarness
         const int TimeoutMs = 60000;
         const string MutexName = "DeepSeekHarnessLauncher";
         const string LockFile = "deepseek-harness-launcher.lock";
+        const string DshPidFile = "deepseek-harness-dsh.pid";
 
         static NotifyIcon tray;
         static Mutex mutex;
@@ -157,7 +159,14 @@ namespace DeepSeekHarness
                 UseShellExecute = false,
                 WindowStyle = ProcessWindowStyle.Hidden
             };
-            Process.Start(psi);
+            var p = Process.Start(psi);
+            // Persist the dsh web server PID so StopDsh() can kill it precisely
+            // without scanning every node.exe on the machine.
+            if (p != null)
+            {
+                try { File.WriteAllText(Path.Combine(Path.GetTempPath(), DshPidFile), p.Id.ToString()); }
+                catch { /* ignore */ }
+            }
         }
 
         static bool IsPortReady()
@@ -304,41 +313,130 @@ namespace DeepSeekHarness
         static int StopDsh()
         {
             int killed = 0;
+
+            // --- Strategy 1: PID-file fast path ---------------------------------
+            // The launcher writes the dsh web server PID at spawn time. If it still
+            // points at a real dsh process, kill it directly — no scan needed.
+            string pidFile = Path.Combine(Path.GetTempPath(), DshPidFile);
+            int? pidFromFile = null;
             try
             {
-                var psi = new ProcessStartInfo("wmic",
-                    "process where \"name='node.exe'\" get ProcessId,CommandLine /FORMAT:CSV")
+                if (File.Exists(pidFile))
+                    pidFromFile = int.Parse(File.ReadAllText(pidFile).Trim());
+            }
+            catch { /* no / unreadable PID file — fall through to scan */ }
+
+            if (pidFromFile.HasValue && IsDshPid(pidFromFile.Value))
+            {
+                try
+                {
+                    // /T = kill the whole process tree. dsh is spawned as
+                    // `cmd /c npx …`, so node.exe is a grandchild — without /T it
+                    // would survive.
+                    var killPsi = new ProcessStartInfo("taskkill",
+                        "/PID " + pidFromFile.Value + " /T /F")
+                    {
+                        CreateNoWindow = true,
+                        UseShellExecute = false,
+                        WindowStyle = ProcessWindowStyle.Hidden
+                    };
+                    var kp = Process.Start(killPsi);
+                    kp.WaitForExit(5000);
+                    killed++;
+                }
+                catch { /* ignore */ }
+            }
+            else
+            {
+                if (pidFromFile.HasValue)
+                {
+                    // Stale file: PID dead, or reused by a non-dsh process. Discard it.
+                    try { File.Delete(pidFile); } catch { }
+                }
+
+                // --- Strategy 2: wmic scan fallback ----------------------------
+                killed += ScanAndKillDsh();
+            }
+
+            // Always clean up the PID file so we never act on a stale one twice.
+            try { if (File.Exists(pidFile)) File.Delete(pidFile); } catch { }
+
+            // Best-effort cleanup of the Node launcher's lock file (the C# launcher
+            // uses a Mutex, but stop.js / index.js create this file).
+            try
+            {
+                string lockPath = Path.Combine(Path.GetTempPath(), LockFile);
+                if (File.Exists(lockPath)) File.Delete(lockPath);
+            }
+            catch { }
+
+            return killed;
+        }
+
+        // Is this PID alive AND its command line proves it is a dsh process?
+        // Guards against PID reuse: Windows recycles PIDs, so a stale PID file
+        // could point at a completely unrelated process.
+        // Uses System.Management (WMI) — the .NET equivalent of PowerShell's
+        // Get-CimInstance Win32_Process — instead of spawning wmic.exe.
+        static bool IsDshPid(int pid)
+        {
+            if (!IsPidAlive(pid)) return false;
+            try
+            {
+                var searcher = new ManagementObjectSearcher(
+                    "SELECT CommandLine FROM Win32_Process WHERE ProcessId = " + pid);
+                foreach (ManagementObject obj in searcher.Get())
+                {
+                    string cmdLine = obj["CommandLine"] as string ?? "";
+                    if (Regex.IsMatch(cmdLine, "dsh|deepseek-ai", RegexOptions.IgnoreCase))
+                        return true;
+                }
+                return false;
+            }
+            catch { return false; }
+        }
+
+        static bool IsPidAlive(int pid)
+        {
+            try
+            {
+                var psi = new ProcessStartInfo("tasklist", "/FI \"PID eq " + pid + "\" /NH")
                 {
                     RedirectStandardOutput = true,
                     UseShellExecute = false,
                     CreateNoWindow = true
                 };
                 var p = Process.Start(psi);
-                string output = p.StandardOutput.ReadToEnd();
                 p.WaitForExit();
+                // tasklist exits 0 if the process exists, 1 if not.
+                return p.ExitCode == 0;
+            }
+            catch { return false; }
+        }
 
-                var lines = output.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries);
-                foreach (var raw in lines)
+        // Scan every node.exe and kill those whose command line matches dsh.
+        // Uses System.Management (WMI) instead of spawning wmic.exe.
+        static int ScanAndKillDsh()
+        {
+            int killed = 0;
+            try
+            {
+                var searcher = new ManagementObjectSearcher(
+                    "SELECT ProcessId, CommandLine FROM Win32_Process WHERE Name = 'node.exe'");
+                foreach (ManagementObject obj in searcher.Get())
                 {
-                    string line = raw.Trim();
-                    if (string.IsNullOrEmpty(line)) continue;
-
-                    var parts = line.Split(',');
-                    if (parts.Length < 3) continue;
-
-                    // CSV layout: Node,<CommandLine>,ProcessId. CommandLine itself may
-                    // contain commas, so rejoin everything between the first and last field.
-                    string cmdLine = string.Join(",", parts, 1, parts.Length - 2);
-                    string pid = parts[parts.Length - 1].Trim();
+                    object pidObj = obj["ProcessId"];
+                    string pidStr = pidObj != null ? pidObj.ToString() : "";
+                    string cmdLine = obj["CommandLine"] as string ?? "";
 
                     if (!Regex.IsMatch(cmdLine, "dsh|deepseek-ai", RegexOptions.IgnoreCase))
                         continue;
-                    if (!Regex.IsMatch(pid, "^\\d+$"))
+                    if (!Regex.IsMatch(pidStr, "^\\d+$"))
                         continue;
 
                     try
                     {
-                        var killPsi = new ProcessStartInfo("taskkill", "/PID " + pid + " /F")
+                        var killPsi = new ProcessStartInfo("taskkill", "/PID " + pidStr + " /T /F")
                         {
                             CreateNoWindow = true,
                             UseShellExecute = false,
@@ -351,17 +449,7 @@ namespace DeepSeekHarness
                     catch { /* ignore individual failures */ }
                 }
             }
-            catch { /* wmic unavailable — nothing we can do */ }
-
-            // Best-effort cleanup of the Node launcher's lock file (the C# launcher
-            // uses a Mutex, but stop.js / index.js create this file).
-            try
-            {
-                string lockPath = Path.Combine(Path.GetTempPath(), LockFile);
-                if (File.Exists(lockPath)) File.Delete(lockPath);
-            }
-            catch { }
-
+            catch { /* WMI unavailable — nothing we can do */ }
             return killed;
         }
     }

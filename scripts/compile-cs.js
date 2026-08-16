@@ -38,6 +38,7 @@ const args = [
   '/out:' + OUT,
   '/reference:System.Windows.Forms.dll',
   '/reference:System.Drawing.dll',
+  '/reference:System.Management.dll',
 ];
 if (fs.existsSync(ICO)) {
   args.push('/win32icon:' + ICO);

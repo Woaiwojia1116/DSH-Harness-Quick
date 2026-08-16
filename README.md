@@ -82,7 +82,12 @@ npm run build:exe
 - 双击 **`stop.bat`**
 - 命令行：`node src/stop.js` 或 `npm run stop`
 
-它们用 `wmic` 找到所有含 `dsh`/`deepseek-ai` 的 node 进程并 `taskkill`。托盘菜单执行的是同一套逻辑的 C# 内嵌版本。
+停止逻辑分两层：
+
+1. **PID 文件精准杀**（默认）：启动器在 spawn dsh 服务时把它的 PID 写入临时目录的 `deepseek-harness-dsh.pid`。停止时先读该 PID，验证它仍存活且命令行含 `dsh`/`deepseek-ai`（防 PID 复用误杀），然后用 `taskkill /PID <pid> /T /F` 精准杀掉整棵进程树。
+2. **`wmic` 扫描兜底**：如果 PID 文件不存在（旧版启动器、崩溃残留等），回退到列出全部 `node.exe`、按命令行特征匹配后逐个击杀。
+
+托盘菜单的 C# 内嵌版本执行同一套两段式逻辑。
 
 ## 常见问题
 
@@ -109,5 +114,5 @@ npm run build:exe
 - **系统托盘**：`NotifyIcon` + `ContextMenuStrip`，启动完成后常驻；`Application.Run()` 进入消息循环
 - **端口检测**：TCP 连接 `127.0.0.1:3080`，不用固定 `setTimeout`
 - **单实例**：命名 Mutex 防止重复启动
-- **停止逻辑内嵌**：`wmic` 查询 + `taskkill`，C# 复刻 `src/stop.js`，无需 node 即可停止服务
+- **停止逻辑内嵌**：两段式 — PID 文件精准杀 + `wmic` 扫描兜底，C# 复刻 `src/stop.js`，无需 node 即可停止服务
 - **体积**：~.NET 原生 exe，约 290 KB，无需捆绑 Node.js 运行时

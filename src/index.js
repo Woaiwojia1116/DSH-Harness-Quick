@@ -47,6 +47,7 @@ const DEFAULT_HOST = '127.0.0.1';
 const POLL_INTERVAL_MS = 400;
 const POLL_TIMEOUT_MS = 60_000;
 const LOCK_FILE = path.join(os.tmpdir(), 'deepseek-harness-launcher.lock');
+const DSH_PID_FILE = path.join(os.tmpdir(), 'deepseek-harness-dsh.pid');
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -229,6 +230,9 @@ function spawnDsh(nodeExe, npxExe) {
   });
   child.unref();
   log('spawnDsh: spawned pid=' + child.pid);
+  // Persist the dsh web server PID so stop.js can kill it precisely
+  // without scanning every node.exe on the machine.
+  try { fs.writeFileSync(DSH_PID_FILE, String(child.pid)); } catch { /* ignore */ }
   return child;
 }
 

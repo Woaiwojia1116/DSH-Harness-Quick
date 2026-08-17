@@ -25,21 +25,22 @@ if not exist "src\Launcher.cs" (
     exit /b 1
 )
 
-:: --- Node.js check (only needed for icon generation) ---
-where node >nul 2>&1
-if errorlevel 1 (
-    echo [WARN] Node.js not found - skipping icon generation.
-    echo         (Place build\icon.ico manually if needed.)
-    goto :compile
-)
-for /f "tokens=*" %%v in ('node -v') do echo [OK] Node.js %%v
-
 :: --- generate icon if needed ---
 if exist "build\icon.ico" goto :compile
+
 if not exist "assets\whale.png" (
     echo [WARN] assets\whale.png not found - building without icon.
     goto :compile
 )
+
+:: --- check Node.js (required for icon generation) ---
+where node >nul 2>&1
+if errorlevel 1 (
+    echo [WARN] Node.js not found - cannot regenerate build\icon.ico.
+    echo         Run "node scripts\make-icon.js" manually, or reinstall Node.js.
+    goto :compile
+)
+for /f "tokens=*" %%v in ('node -v') do echo [OK] Node.js %%v
 
 echo.
 echo [..] Generating icon from assets\whale.png...

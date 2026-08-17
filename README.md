@@ -79,7 +79,7 @@ npm run build:exe
 
 启动器的图标（exe 图标 + 系统托盘图标）支持自定义，**在构建时指定**，运行时无法切换。步骤如下：
 
-1. **替换源图片**：把你的透明 PNG 图标替换 `assets/whale.png`（任意尺寸，会自动缩放到 256×256）
+1. **替换源图片**：把你的透明 PNG 图标替换 `assets/whale.png`（任意尺寸，会自动缩放到 256×256），并删除build目录下的.ico文件
 2. **重新生成图标并编译**：运行 `build.bat`（或依次执行 `npm run build:icon` + `npm run build:exe`）
 
 > **注意**：托盘图标和 exe 图标是同一个。运行时托盘图标通过 `Icon.ExtractAssociatedIcon` 从编译好的 exe 自身读取，因此无法让托盘图标与 exe 图标不同。

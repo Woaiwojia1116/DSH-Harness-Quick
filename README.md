@@ -7,7 +7,7 @@
 - 双击 `DeepSeek-Harness.exe` → 静默启动 dsh web → 自动在浏览器打开 `http://127.0.0.1:3080` → **最小化到系统托盘**
 - 如果 dsh web 已在运行，直接打开浏览器（不会重复启动）
 - 启动前自动检测 Node.js 环境
-- **托盘右键菜单**：打开浏览器 / 停止服务 / 退出（退出时会一并停止服务）
+- **托盘右键菜单**：打开浏览器 / 退出（退出时会一并停止服务）
 
 ## 文件结构
 
@@ -20,7 +20,7 @@ dsh-destop/
 │   ├── compile-cs.js         # C# 编译编排（生成最终 exe）
 │   └── make-icon.js          # PNG → ICO 转换
 ├── assets/
-│   └── whale.png             # 大肥鱼图标源图（透明 PNG）
+│   └── whale.png             # 图标源图（透明 PNG，可替换以自定义图标）
 ├── build/                    # 构建中间产物（icon.ico）
 ├── dist/                     # 最终产物 DeepSeek-Harness.exe
 ├── package.json
@@ -36,7 +36,20 @@ dsh-destop/
 
 - [.NET Framework 4.x](https://dotnet.microsoft.com)（Windows 自带）
 - [Node.js](https://nodejs.org) LTS（≥18，仅在需要重新生成图标时用到）
-- 大肥鱼 PNG 放在 `assets/whale.png`
+- [Git](https://git-scm.com)（用于拉取项目）
+
+### 获取项目
+
+```bash
+# 克隆项目
+git clone https://github.com/Woaiwojia1116/DSH-Harness-Quick.git
+cd DSH-Harness-Quick
+
+# 安装依赖（构建图标需要 sharp 和 png-to-ico）
+npm install
+```
+
+> 如果项目已有更新，进入项目目录后执行 `git pull` 拉取最新代码，再重新构建即可。
 
 ### 一键构建
 
@@ -56,12 +69,22 @@ dsh-destop/
 
 ```bash
 # 1. 准备图标（把大肥鱼 PNG 放到 assets/whale.png 后执行一次）
-npm install
 npm run build:icon
 
 # 2. 编译 C# 启动器
 npm run build:exe
 ```
+
+### 自定义图标
+
+启动器的图标（exe 图标 + 系统托盘图标）支持自定义，**在构建时指定**，运行时无法切换。步骤如下：
+
+1. **替换源图片**：把你的透明 PNG 图标替换 `assets/whale.png`（任意尺寸，会自动缩放到 256×256）
+2. **重新生成图标并编译**：运行 `build.bat`（或依次执行 `npm run build:icon` + `npm run build:exe`）
+
+> **注意**：托盘图标和 exe 图标是同一个。运行时托盘图标通过 `Icon.ExtractAssociatedIcon` 从编译好的 exe 自身读取，因此无法让托盘图标与 exe 图标不同。
+
+如果 `assets/whale.png` 缺失，构建不会失败，会回退到默认托盘图标。
 
 ## 系统托盘
 
@@ -70,7 +93,6 @@ npm run build:exe
 | 菜单项 | 作用 |
 | --- | --- |
 | **打开 DeepSeek Harness** | 若服务未运行则先启动，再打开浏览器 |
-| **停止服务** | 杀掉 dsh web 进程（无需 node / stop.js），托盘保留 |
 | **退出** | 停止服务 + 关闭托盘 |
 
 托盘提示文字会显示当前状态（正在运行 / 已停止）。停止逻辑内嵌在 exe 中，分发的单文件也无需附带 `node` 即可停止服务。
@@ -93,7 +115,7 @@ npm run build:exe
 
 ### 双击后没反应 / 浏览器空白页
 - 第一次启动 dsh web 需要几秒到几十秒（下载依赖、构建前端）。启动器会轮询端口直到服务就绪再开浏览器。
-- 如果 60 秒内没起来，会提示并仍尝试打开浏览器。等几秒再双击一次即可。
+- 如果 60 秒内没起来，会提示并仍尝试打开浏览器。点击确定即可。
 
 ### 「Node.js required」提示
 - 系统未安装 Node.js，或未加入 PATH。安装 LTS 版后重试。
@@ -105,7 +127,7 @@ npm run build:exe
 - 启动器有单实例 Mutex（`DeepSeekHarnessLauncher`），双击多次不会重复启动。
 
 ### 重新构建 / 图标没变
-- 删除 `build/icon.ico` 和 `dist/` 后重新运行 `build.bat`。
+- 替换 `assets/whale.png` 后，删除 `build/icon.ico` 和 `dist/`，再重新运行 `build.bat`。详见上方「自定义图标」。
 
 ## 技术细节
 

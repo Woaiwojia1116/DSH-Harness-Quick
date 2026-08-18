@@ -242,6 +242,10 @@ namespace DeepSeekHarness
             openItem.Click += TrayOpen_Click;
             menu.Items.Add(openItem);
 
+            var restartItem = new ToolStripMenuItem("重启");
+            restartItem.Click += TrayRestart_Click;
+            menu.Items.Add(restartItem);
+
             menu.Items.Add(new ToolStripSeparator());
 
             var exitItem = new ToolStripMenuItem("退出");
@@ -287,6 +291,41 @@ namespace DeepSeekHarness
             else
             {
                 OpenBrowser();
+                MessageBox.Show(
+                    "dsh web did not become ready in time. Opening browser anyway.",
+                    "DeepSeek Harness — slow start",
+                    MessageBoxButtons.OK, MessageBoxIcon.Information);
+            }
+        }
+
+        static void TrayRestart_Click(object sender, EventArgs e)
+        {
+            // 1) Stop the current service first.
+            StopDsh();
+
+            // 2) Confirm node is available.
+            string node = FindNode();
+            if (node == null)
+            {
+                MessageBox.Show(
+                    "Node.js was not found — cannot start the service.",
+                    "DeepSeek Harness — Node.js required",
+                    MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                UpdateTrayText(false);
+                return;
+            }
+
+            // 3) Spawn and wait, then open the browser.
+            SpawnDsh(node);
+            if (WaitForService())
+            {
+                OpenBrowser();
+                UpdateTrayText(true);
+            }
+            else
+            {
+                OpenBrowser();
+                UpdateTrayText(false);
                 MessageBox.Show(
                     "dsh web did not become ready in time. Opening browser anyway.",
                     "DeepSeek Harness — slow start",

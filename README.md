@@ -1,6 +1,6 @@
 # DeepSeek Harness 桌面启动器
 
-将 `npx @deepseek-ai/dsh web` 封装成一个双击即用的 Windows `.exe`，带大肥鱼图标，**无任何终端窗口**
+将 `npx @deepseek-ai/dsh web` 封装成一个双击即用的 Windows `.exe`，带大肥鱼图标，**无任何终端窗口**，启动速度接近dsh web命令
 
 适合已经安装好dsh，但是不想每次都在命令行打开，而且难以忍受黑窗口一直存在的小伙伴
 
@@ -112,13 +112,6 @@ npm run build:exe
 
 - 双击 **`stop.bat`**
 - 命令行：`node src/stop.js` 或 `npm run stop`
-
-停止逻辑分两层：
-
-1. **PID 文件精准杀**（默认）：启动器在 spawn dsh 服务时把它的 PID 写入临时目录的 `deepseek-harness-dsh.pid`。停止时先读该 PID，验证它仍存活且命令行含 `dsh`/`deepseek-ai`（防 PID 复用误杀），然后用 `taskkill /PID <pid> /T /F` 精准杀掉整棵进程树。
-2. **`wmic` 扫描兜底**：如果 PID 文件不存在（旧版启动器、崩溃残留等），回退到列出全部 `node.exe`、按命令行特征匹配后逐个击杀。
-
-托盘菜单的 C# 内嵌版本执行同一套两段式逻辑。
 
 ## 常见问题
 

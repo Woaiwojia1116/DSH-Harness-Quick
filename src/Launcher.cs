@@ -171,14 +171,61 @@ namespace DeepSeekHarness
             return null;
         }
 
+        // Find the `dsh` executable so we can call it directly instead of going
+        // through npx (which adds several seconds of package resolution overhead).
+        // Returns the path to `dsh.cmd`/`dsh`, or null if not found.
+        static string FindDsh(string node)
+        {
+            string nodeDir = Path.GetDirectoryName(node);
+
+            // 1) Global install: dsh.cmd / dsh right next to node.exe.
+            foreach (var name in new[] { "dsh.cmd", "dsh" })
+            {
+                string p = Path.Combine(nodeDir, name);
+                if (File.Exists(p)) return p;
+            }
+
+            // 2) Windows default npm global prefix: %APPDATA%\npm.
+            //    This is the same directory that `npm config get prefix` returns
+            //    on a default install, but checked without spawning a process.
+            try
+            {
+                string appData = Environment.GetEnvironmentVariable("APPDATA");
+                if (!string.IsNullOrEmpty(appData))
+                {
+                    string npmGlobal = Path.Combine(appData, "npm");
+                    foreach (var name in new[] { "dsh.cmd", "dsh" })
+                    {
+                        string candidate = Path.Combine(npmGlobal, name);
+                        if (File.Exists(candidate)) return candidate;
+                    }
+                }
+            }
+            catch { }
+
+            return null;
+        }
+
         static void SpawnDsh(string node)
         {
-            // Run `cmd /c npx @deepseek-ai/dsh web` with no window.
-            string npx = Path.Combine(Path.GetDirectoryName(node), "npx.cmd");
-            if (!File.Exists(npx)) npx = Path.Combine(Path.GetDirectoryName(node), "npx");
-            if (!File.Exists(npx)) npx = "npx"; // fallback to PATH
+            // Fast path: run `dsh web` directly, skipping npx resolution
+            // overhead (npx can add several seconds resolving the package).
+            string dsh = FindDsh(node);
+            string args;
+            if (dsh != null)
+            {
+                args = "/c \"" + dsh + "\" web";
+            }
+            else
+            {
+                // Slow fallback: npx @deepseek-ai/dsh web
+                string npx = Path.Combine(Path.GetDirectoryName(node), "npx.cmd");
+                if (!File.Exists(npx)) npx = Path.Combine(Path.GetDirectoryName(node), "npx");
+                if (!File.Exists(npx)) npx = "npx";
+                args = "/c \"" + npx + "\" @deepseek-ai/dsh web";
+            }
 
-            var psi = new ProcessStartInfo("cmd", "/c \"" + npx + "\" @deepseek-ai/dsh web")
+            var psi = new ProcessStartInfo("cmd", args)
             {
                 CreateNoWindow = true,
                 UseShellExecute = false,
@@ -235,7 +282,7 @@ namespace DeepSeekHarness
                 using (var c = new TcpClient())
                 {
                     var result = c.BeginConnect(Host, Port, null, null);
-                    var wait = result.AsyncWaitHandle.WaitOne(2000);
+                    var wait = result.AsyncWaitHandle.WaitOne(500);
                     if (!wait) return false;
                     c.EndConnect(result);
                     return true;

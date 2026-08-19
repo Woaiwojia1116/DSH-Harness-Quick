@@ -131,6 +131,37 @@ function findNpx(nodeExe) {
   return null;
 }
 
+function findDsh(nodeExe) {
+  const nodeDir = path.dirname(nodeExe);
+
+  for (const name of ['dsh.cmd', 'dsh']) {
+    const p = path.join(nodeDir, name);
+    if (fs.existsSync(p)) {
+      log('findDsh: found next to node: ' + p);
+      return p;
+    }
+  }
+
+  try {
+    const appData = process.env.APPDATA;
+    if (appData) {
+      const npmGlobal = path.join(appData, 'npm');
+      for (const name of ['dsh.cmd', 'dsh']) {
+        const candidate = path.join(npmGlobal, name);
+        if (fs.existsSync(candidate)) {
+          log('findDsh: found in APPDATA/npm: ' + candidate);
+          return candidate;
+        }
+      }
+    }
+  } catch (e) {
+    log('findDsh: APPDATA check failed: ' + e.message);
+  }
+
+  log('findDsh: NOT FOUND');
+  return null;
+}
+
 function openBrowser(url) {
   log('openBrowser: ' + url);
   spawn('cmd', ['/c', 'start', '', url], {
@@ -207,18 +238,28 @@ function releaseLock() {
 
 function spawnDsh(nodeExe, npxExe) {
   log('spawnDsh: node=' + nodeExe + ' npx=' + npxExe);
-  const isCmd = process.platform === 'win32';
+
+  const dshExe = findDsh(nodeExe);
   let bin, args;
-  if (isCmd) {
+
+  if (dshExe) {
     bin = 'cmd';
-    if (npxExe.endsWith('.cmd')) {
-      args = ['/c', npxExe, DSH_PACKAGE, ...DSH_ARGS];
-    } else {
-      args = ['/c', 'npx', DSH_PACKAGE, ...DSH_ARGS];
-    }
+    args = ['/c', dshExe, ...DSH_ARGS];
+    log('spawnDsh: fast path via dsh: ' + dshExe);
   } else {
-    bin = nodeExe;
-    args = ['npx', DSH_PACKAGE, ...DSH_ARGS];
+    log('spawnDsh: slow path via npx');
+    const isCmd = process.platform === 'win32';
+    if (isCmd) {
+      bin = 'cmd';
+      if (npxExe.endsWith('.cmd')) {
+        args = ['/c', npxExe, DSH_PACKAGE, ...DSH_ARGS];
+      } else {
+        args = ['/c', 'npx', DSH_PACKAGE, ...DSH_ARGS];
+      }
+    } else {
+      bin = nodeExe;
+      args = ['npx', DSH_PACKAGE, ...DSH_ARGS];
+    }
   }
 
   log('spawnDsh: bin=' + bin + ' args=' + JSON.stringify(args));
@@ -230,8 +271,6 @@ function spawnDsh(nodeExe, npxExe) {
   });
   child.unref();
   log('spawnDsh: spawned pid=' + child.pid);
-  // Persist the dsh web server PID so stop.js can kill it precisely
-  // without scanning every node.exe on the machine.
   try { fs.writeFileSync(DSH_PID_FILE, String(child.pid)); } catch { /* ignore */ }
   return child;
 }

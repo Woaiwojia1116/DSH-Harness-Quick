@@ -21,10 +21,10 @@ if not exist "src\Launcher.cs" (
 
 if exist "build\icon.ico" (
     echo [..] Compiling with icon...
-    "%CSC%" /target:winexe /out:"dist\DeepSeek-Harness.exe" /win32icon:"build\icon.ico" /reference:System.Windows.Forms.dll "src\Launcher.cs"
+    "%CSC%" /target:winexe /out:"dist\DeepSeek-Harness.exe" /win32icon:"build\icon.ico" /reference:System.Windows.Forms.dll /reference:System.Drawing.dll /reference:System.Management.dll "src\Launcher.cs"
 ) else (
     echo [..] Compiling (no icon)...
-    "%CSC%" /target:winexe /out:"dist\DeepSeek-Harness.exe" /reference:System.Windows.Forms.dll "src\Launcher.cs"
+    "%CSC%" /target:winexe /out:"dist\DeepSeek-Harness.exe" /reference:System.Windows.Forms.dll /reference:System.Drawing.dll /reference:System.Management.dll "src\Launcher.cs"
 )
 
 if errorlevel 1 (

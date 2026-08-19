@@ -145,5 +145,6 @@ npm run build:exe
 - **系统托盘**：`NotifyIcon` + `ContextMenuStrip`，启动完成后常驻；`Application.Run()` 进入消息循环
 - **端口检测**：TCP 连接 `127.0.0.1:3080`，不用固定 `setTimeout`
 - **单实例**：命名 Mutex 防止重复启动
+- **快速启动**：优先直接调用全局安装的 `dsh`（`dsh.cmd`），跳过 `npx` 的包解析开销；找不到时回退到 `npx @deepseek-ai/dsh web`
 - **停止逻辑内嵌**：两段式 — PID 文件精准杀 + `wmic` 扫描兜底，C# 复刻 `src/stop.js`，无需 node 即可停止服务
 - **体积**：~.NET 原生 exe，约 290 KB，无需捆绑 Node.js 运行时

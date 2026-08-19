@@ -17,6 +17,7 @@ using System.Drawing;
 using System.IO;
 using System.Management;
 using System.Net.Sockets;
+using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Windows.Forms;
@@ -35,6 +36,8 @@ namespace DeepSeekHarness
 
         static NotifyIcon tray;
         static Mutex mutex;
+        static readonly object _outputLock = new object();
+        static StringBuilder _dshAbnormalOutput;
 
         [STAThread]
         static void Main()
@@ -101,11 +104,13 @@ namespace DeepSeekHarness
             // Wait for it to come up, then open the browser.
             if (WaitForService())
             {
+                ShowDshAbnormalOutputIfAny();
                 OpenBrowser();
                 return true;
             }
             else
             {
+                ShowDshAbnormalOutputIfAny();
                 // Timed out — open anyway, might finish loading.
                 MessageBox.Show(
                     "dsh web did not respond on port " + Port + " within " +
@@ -117,6 +122,26 @@ namespace DeepSeekHarness
                 OpenBrowser();
                 return false;
             }
+        }
+
+        // If dsh web produced any output besides the normal URL line, show it in
+        // a popup so the user can see errors/warnings that occurred during startup.
+        static void ShowDshAbnormalOutputIfAny()
+        {
+            string abnormal;
+            lock (_outputLock)
+            {
+                abnormal = _dshAbnormalOutput != null ? _dshAbnormalOutput.ToString().Trim() : "";
+            }
+            if (string.IsNullOrEmpty(abnormal)) return;
+
+            string text = abnormal.Length > 4000
+                ? abnormal.Substring(0, 4000) + "\n…(已截断)"
+                : abnormal;
+            MessageBox.Show(
+                text,
+                "DeepSeek Harness — dsh web 输出",
+                MessageBoxButtons.OK, MessageBoxIcon.Warning);
         }
 
         // ---------------------------------------------------------------------
@@ -157,9 +182,35 @@ namespace DeepSeekHarness
             {
                 CreateNoWindow = true,
                 UseShellExecute = false,
-                WindowStyle = ProcessWindowStyle.Hidden
+                WindowStyle = ProcessWindowStyle.Hidden,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true
             };
             var p = Process.Start(psi);
+
+            // Capture abnormal output (anything except the normal URL line) so we
+            // can surface errors/warnings to the user in a popup after startup.
+            lock (_outputLock) { _dshAbnormalOutput = new StringBuilder(); }
+            if (p != null)
+            {
+                p.OutputDataReceived += (s, e) =>
+                {
+                    if (e.Data != null && !IsNormalDshLine(e.Data))
+                    {
+                        lock (_outputLock) { _dshAbnormalOutput.AppendLine(e.Data); }
+                    }
+                };
+                p.ErrorDataReceived += (s, e) =>
+                {
+                    if (e.Data != null)
+                    {
+                        lock (_outputLock) { _dshAbnormalOutput.AppendLine(e.Data); }
+                    }
+                };
+                p.BeginOutputReadLine();
+                p.BeginErrorReadLine();
+            }
+
             // Persist the dsh web server PID so StopDsh() can kill it precisely
             // without scanning every node.exe on the machine.
             if (p != null)
@@ -167,6 +218,14 @@ namespace DeepSeekHarness
                 try { File.WriteAllText(Path.Combine(Path.GetTempPath(), DshPidFile), p.Id.ToString()); }
                 catch { /* ignore */ }
             }
+        }
+
+        // A line is "normal" if it is empty or contains the serving URL — anything
+        // else (errors, warnings, stack traces) is treated as abnormal output.
+        static bool IsNormalDshLine(string line)
+        {
+            if (string.IsNullOrEmpty(line)) return true;
+            return line.Contains("http://" + Host + ":" + Port);
         }
 
         static bool IsPortReady()
@@ -285,11 +344,13 @@ namespace DeepSeekHarness
             SpawnDsh(node);
             if (WaitForService())
             {
+                ShowDshAbnormalOutputIfAny();
                 OpenBrowser();
                 UpdateTrayText(true);
             }
             else
             {
+                ShowDshAbnormalOutputIfAny();
                 OpenBrowser();
                 MessageBox.Show(
                     "dsh web did not become ready in time. Opening browser anyway.",
@@ -319,11 +380,13 @@ namespace DeepSeekHarness
             SpawnDsh(node);
             if (WaitForService())
             {
+                ShowDshAbnormalOutputIfAny();
                 OpenBrowser();
                 UpdateTrayText(true);
             }
             else
             {
+                ShowDshAbnormalOutputIfAny();
                 OpenBrowser();
                 UpdateTrayText(false);
                 MessageBox.Show(
